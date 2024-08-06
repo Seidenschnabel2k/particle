@@ -35,6 +35,8 @@ class Particle:
         self.e = e
         self.r = r
         self.nu = nu
+        self.positions_history = []
+
     def calc_f(self):
         self.a.zero_()
         # Compute pairwise distance vectors
@@ -44,22 +46,48 @@ class Particle:
         # Avoid division by zero for distance
         mask = dist_sq > 0
         dist = dist_sq.sqrt() + (~mask).float()
+        touching = dist < 2*self.r
+        overlap = 2*self.r - dist
+        normal_force_magnitude = self.k * overlap * touching.float()
+# Normal force direction
+        normal_force_direction = diff / dist.unsqueeze(-1)  # Shape: (N, N, 3)
+        normal_force_direction[dist == 0] = 0
+        normal_forces = normal_force_magnitude.unsqueeze(-1) * normal_force_direction  # Shape: (N, N, 3)
+        net_normal_forces = normal_forces.sum(dim=0)  # Shape: (N, 3)
+        self.a = net_normal_forces / self.m
+
+        
+
 
 
     def update(self):
         self.v += self.a * self.dt
         self.x += self.v * self.dt
+        self.positions_history.append(self.x.cpu().clone())
 
     def run(self,num_steps):
         for _ in range(num_steps):
+            self.calc_f()
             self.update()
+            
+    def get_positions_history(self):
+        return self.positions_history
 
 
-sim = Particle(400)
-sim.run(num_steps=1000)
-
-print(sim.x.T[1])
+sim = Particle(4000)
+sim.run(num_steps=100)
+positions_history = sim.get_positions_history()
 fig = plt.figure()
 ax = fig.add_subplot(projection='3d')
-ax.scatter(sim.x.T[0].cpu(),sim.x.T[1].cpu(),sim.x.T[2].cpu())
+scat = ax.scatter([], [], [])
+#ax.scatter(sim.x.T[0].cpu(),sim.x.T[1].cpu(),sim.x.T[2].cpu())
+#plt.show()
+def update_plot(frame):
+    positions = positions_history[frame]
+    scat._offsets3d = (positions[:, 0], positions[:, 1], positions[:, 2])
+    return scat,
+
+ani = FuncAnimation(fig, update_plot, frames=len(positions_history), interval=50, blit=False)
+
 plt.show()
+
