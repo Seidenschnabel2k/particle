@@ -19,7 +19,7 @@ class Particle:
     """
     def __init__(self, 
                  num_particles,
-                 alpha = .1,
+                 alpha = 1,
                  rho = 4500,
                  r=.015, 
                  e=.9,
@@ -54,40 +54,40 @@ class Particle:
         normal_force_direction[dist == 0] = 0
         normal_forces = normal_force_magnitude.unsqueeze(-1) * normal_force_direction  # Shape: (N, N, 3)
         net_normal_forces = normal_forces.sum(dim=0)  # Shape: (N, 3)
-        self.a = net_normal_forces / self.m
-
+        self.a += net_normal_forces / self.m
+        self.a[:,2] -= torch.ones(self.a.shape[0],device=device).T*g
         
-
-
 
     def update(self):
         self.v += self.a * self.dt
         self.x += self.v * self.dt
         self.positions_history.append(self.x.cpu().clone())
+        #print('v = ',self.v[0],'\n x = ',self.x[0])
 
     def run(self,num_steps):
-        for _ in range(num_steps):
+        for step in range(num_steps):
             self.calc_f()
             self.update()
+            #print(step*self.dt)
             
     def get_positions_history(self):
         return self.positions_history
 
-
-sim = Particle(4000)
-sim.run(num_steps=100)
+sim = Particle(200)
+sim.run(num_steps=int(.1/sim.dt))
 positions_history = sim.get_positions_history()
 fig = plt.figure()
 ax = fig.add_subplot(projection='3d')
-scat = ax.scatter([], [], [])
+scat = ax.scatter([], [], [],s=100)
 #ax.scatter(sim.x.T[0].cpu(),sim.x.T[1].cpu(),sim.x.T[2].cpu())
 #plt.show()
 def update_plot(frame):
-    positions = positions_history[frame]
+    positions = positions_history[frame*int(.016/sim.dt)]
     scat._offsets3d = (positions[:, 0], positions[:, 1], positions[:, 2])
     return scat,
 
-ani = FuncAnimation(fig, update_plot, frames=len(positions_history), interval=50, blit=False)
+ani = FuncAnimation(fig, update_plot, frames=len(positions_history)//int(.016/sim.dt), interval=16, blit=False)
 
+print(int(.016/sim.dt))
 plt.show()
 
